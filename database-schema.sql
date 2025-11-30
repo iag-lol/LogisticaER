@@ -17,44 +17,58 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- 2. ENUMS (TIPOS PERSONALIZADOS)
 -- =====================================================
 
--- Roles de usuario
-CREATE TYPE user_role AS ENUM (
-  'JT',   -- Jefe de Terminal
-  'SA',   -- Supervisor Administrador
-  'S',    -- Supervisor
-  'IPA',  -- Inspector de Patio Administrativo
-  'IP'    -- Inspector de Patio
-);
+-- Eliminar tipos existentes si hay conflictos (solo si es necesario)
+DO $$
+BEGIN
+  -- Roles de usuario
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+    CREATE TYPE user_role AS ENUM (
+      'JT',   -- Jefe de Terminal
+      'SA',   -- Supervisor Administrador
+      'S',    -- Supervisor
+      'IPA',  -- Inspector de Patio Administrativo
+      'IP'    -- Inspector de Patio
+    );
+  END IF;
 
--- Estados de tareas
-CREATE TYPE task_status AS ENUM (
-  'PENDING',
-  'IN_PROGRESS',
-  'COMPLETED'
-);
+  -- Estados de tareas
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'task_status') THEN
+    CREATE TYPE task_status AS ENUM (
+      'PENDING',
+      'IN_PROGRESS',
+      'COMPLETED'
+    );
+  END IF;
 
--- Prioridades de tareas
-CREATE TYPE task_priority AS ENUM (
-  'LOW',
-  'MEDIUM',
-  'HIGH',
-  'CRITICAL'
-);
+  -- Prioridades de tareas
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'task_priority') THEN
+    CREATE TYPE task_priority AS ENUM (
+      'LOW',
+      'MEDIUM',
+      'HIGH',
+      'CRITICAL'
+    );
+  END IF;
 
--- Estados de solicitudes
-CREATE TYPE request_status AS ENUM (
-  'PENDING',
-  'PENDING_APPROVAL',
-  'APPROVED',
-  'REJECTED'
-);
+  -- Estados de solicitudes
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'request_status') THEN
+    CREATE TYPE request_status AS ENUM (
+      'PENDING',
+      'PENDING_APPROVAL',
+      'APPROVED',
+      'REJECTED'
+    );
+  END IF;
 
--- Estados de limpieza
-CREATE TYPE cleaning_status AS ENUM (
-  'PENDING',
-  'IN_PROGRESS',
-  'COMPLETED'
-);
+  -- Estados de limpieza
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'cleaning_status') THEN
+    CREATE TYPE cleaning_status AS ENUM (
+      'PENDING',
+      'IN_PROGRESS',
+      'COMPLETED'
+    );
+  END IF;
+END $$;
 
 -- =====================================================
 -- 3. TABLA: profiles
@@ -62,7 +76,7 @@ CREATE TYPE cleaning_status AS ENUM (
 -- Perfiles de usuarios del sistema
 -- Vinculado con auth.users (1:1)
 
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   rut TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
@@ -73,9 +87,9 @@ CREATE TABLE profiles (
 );
 
 -- Índices para búsquedas eficientes
-CREATE INDEX idx_profiles_rut ON profiles(rut);
-CREATE INDEX idx_profiles_role ON profiles(role);
-CREATE INDEX idx_profiles_terminal ON profiles(terminal);
+CREATE INDEX IF NOT EXISTS idx_profiles_rut ON profiles(rut);
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
+CREATE INDEX IF NOT EXISTS idx_profiles_terminal ON profiles(terminal);
 
 -- Comentarios
 COMMENT ON TABLE profiles IS 'Perfiles de usuarios corporativos vinculados a auth.users';
@@ -87,7 +101,7 @@ COMMENT ON COLUMN profiles.role IS 'Rol jerárquico: JT > SA > S > IPA > IP';
 -- =====================================================
 -- Tareas operativas del patio
 
-CREATE TABLE tasks (
+CREATE TABLE IF NOT EXISTS tasks (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
   description TEXT,
@@ -103,11 +117,11 @@ CREATE TABLE tasks (
 );
 
 -- Índices
-CREATE INDEX idx_tasks_status ON tasks(status);
-CREATE INDEX idx_tasks_priority ON tasks(priority);
-CREATE INDEX idx_tasks_created_by ON tasks(created_by);
-CREATE INDEX idx_tasks_due_at ON tasks(due_at);
-CREATE INDEX idx_tasks_start_at ON tasks(start_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
+CREATE INDEX IF NOT EXISTS idx_tasks_created_by ON tasks(created_by);
+CREATE INDEX IF NOT EXISTS idx_tasks_due_at ON tasks(due_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_start_at ON tasks(start_at);
 
 -- Comentarios
 COMMENT ON TABLE tasks IS 'Tareas operativas asignadas a supervisores e inspectores';
@@ -118,7 +132,7 @@ COMMENT ON COLUMN tasks.attachment_url IS 'URL de archivo adjunto en Supabase St
 -- =====================================================
 -- Relación muchos-a-muchos: tareas ↔ supervisores
 
-CREATE TABLE task_supervisors (
+CREATE TABLE IF NOT EXISTS task_supervisors (
   task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   supervisor_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -126,8 +140,8 @@ CREATE TABLE task_supervisors (
 );
 
 -- Índices
-CREATE INDEX idx_task_supervisors_task ON task_supervisors(task_id);
-CREATE INDEX idx_task_supervisors_supervisor ON task_supervisors(supervisor_id);
+CREATE INDEX IF NOT EXISTS idx_task_supervisors_task ON task_supervisors(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_supervisors_supervisor ON task_supervisors(supervisor_id);
 
 -- Constraint: Solo usuarios con rol S, SA o JT pueden ser supervisores
 ALTER TABLE task_supervisors
@@ -141,7 +155,7 @@ ALTER TABLE task_supervisors
 -- =====================================================
 -- Relación muchos-a-muchos: tareas ↔ inspectores
 
-CREATE TABLE task_inspectors (
+CREATE TABLE IF NOT EXISTS task_inspectors (
   task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   inspector_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -149,8 +163,8 @@ CREATE TABLE task_inspectors (
 );
 
 -- Índices
-CREATE INDEX idx_task_inspectors_task ON task_inspectors(task_id);
-CREATE INDEX idx_task_inspectors_inspector ON task_inspectors(inspector_id);
+CREATE INDEX IF NOT EXISTS idx_task_inspectors_task ON task_inspectors(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_inspectors_inspector ON task_inspectors(inspector_id);
 
 -- Constraint: Solo usuarios con rol IP o IPA pueden ser inspectores
 ALTER TABLE task_inspectors
@@ -164,7 +178,7 @@ ALTER TABLE task_inspectors
 -- =====================================================
 -- Reuniones y briefings del equipo
 
-CREATE TABLE meetings (
+CREATE TABLE IF NOT EXISTS meetings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
   description TEXT,
@@ -176,8 +190,8 @@ CREATE TABLE meetings (
 );
 
 -- Índices
-CREATE INDEX idx_meetings_scheduled_at ON meetings(scheduled_at);
-CREATE INDEX idx_meetings_created_by ON meetings(created_by);
+CREATE INDEX IF NOT EXISTS idx_meetings_scheduled_at ON meetings(scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_meetings_created_by ON meetings(created_by);
 
 -- Comentarios
 COMMENT ON TABLE meetings IS 'Reuniones y briefings programados';
@@ -188,7 +202,7 @@ COMMENT ON COLUMN meetings.location IS 'Ubicación física o enlace virtual (Zoo
 -- =====================================================
 -- Relación muchos-a-muchos: reuniones ↔ asistentes
 
-CREATE TABLE meeting_attendees (
+CREATE TABLE IF NOT EXISTS meeting_attendees (
   meeting_id UUID NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
   attendee_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   role TEXT,
@@ -197,8 +211,8 @@ CREATE TABLE meeting_attendees (
 );
 
 -- Índices
-CREATE INDEX idx_meeting_attendees_meeting ON meeting_attendees(meeting_id);
-CREATE INDEX idx_meeting_attendees_attendee ON meeting_attendees(attendee_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_attendees_meeting ON meeting_attendees(meeting_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_attendees_attendee ON meeting_attendees(attendee_id);
 
 -- Comentarios
 COMMENT ON COLUMN meeting_attendees.role IS 'Rol del asistente en la reunión (ej: Moderador, Presentador)';
@@ -208,7 +222,7 @@ COMMENT ON COLUMN meeting_attendees.role IS 'Rol del asistente en la reunión (e
 -- =====================================================
 -- Informes ejecutivos generados
 
-CREATE TABLE reports (
+CREATE TABLE IF NOT EXISTS reports (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
   description TEXT,
@@ -219,8 +233,8 @@ CREATE TABLE reports (
 );
 
 -- Índices
-CREATE INDEX idx_reports_week_year ON reports(generated_for_year, generated_for_week);
-CREATE INDEX idx_reports_created_at ON reports(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reports_week_year ON reports(generated_for_year, generated_for_week);
+CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at DESC);
 
 -- Comentarios
 COMMENT ON TABLE reports IS 'Informes ejecutivos semanales/mensuales';
@@ -231,7 +245,7 @@ COMMENT ON COLUMN reports.file_url IS 'URL del PDF/Excel en Supabase Storage';
 -- =====================================================
 -- Sesiones de control de asistencia
 
-CREATE TABLE attendance_sessions (
+CREATE TABLE IF NOT EXISTS attendance_sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
   shift TEXT NOT NULL,
@@ -243,9 +257,9 @@ CREATE TABLE attendance_sessions (
 );
 
 -- Índices
-CREATE INDEX idx_attendance_sessions_scheduled ON attendance_sessions(scheduled_for);
-CREATE INDEX idx_attendance_sessions_supervisor ON attendance_sessions(supervisor_id);
-CREATE INDEX idx_attendance_sessions_terminal ON attendance_sessions(terminal);
+CREATE INDEX IF NOT EXISTS idx_attendance_sessions_scheduled ON attendance_sessions(scheduled_for);
+CREATE INDEX IF NOT EXISTS idx_attendance_sessions_supervisor ON attendance_sessions(supervisor_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_sessions_terminal ON attendance_sessions(terminal);
 
 -- Comentarios
 COMMENT ON TABLE attendance_sessions IS 'Sesiones de control de asistencia por turno';
@@ -256,7 +270,7 @@ COMMENT ON COLUMN attendance_sessions.shift IS 'Turno: Mañana, Tarde, Noche';
 -- =====================================================
 -- Planes de limpieza y mantenimiento de aseo
 
-CREATE TABLE cleaning_plans (
+CREATE TABLE IF NOT EXISTS cleaning_plans (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
   description TEXT,
@@ -267,8 +281,8 @@ CREATE TABLE cleaning_plans (
 );
 
 -- Índices
-CREATE INDEX idx_cleaning_plans_status ON cleaning_plans(status);
-CREATE INDEX idx_cleaning_plans_scheduled ON cleaning_plans(scheduled_for);
+CREATE INDEX IF NOT EXISTS idx_cleaning_plans_status ON cleaning_plans(status);
+CREATE INDEX IF NOT EXISTS idx_cleaning_plans_scheduled ON cleaning_plans(scheduled_for);
 
 -- Comentarios
 COMMENT ON TABLE cleaning_plans IS 'Planes de limpieza y aseo del patio';
@@ -278,7 +292,7 @@ COMMENT ON TABLE cleaning_plans IS 'Planes de limpieza y aseo del patio';
 -- =====================================================
 -- Solicitudes de recursos y requerimientos
 
-CREATE TABLE requests (
+CREATE TABLE IF NOT EXISTS requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
   detail TEXT,
@@ -290,10 +304,10 @@ CREATE TABLE requests (
 );
 
 -- Índices
-CREATE INDEX idx_requests_status ON requests(status);
-CREATE INDEX idx_requests_requester ON requests(requester_id);
-CREATE INDEX idx_requests_approver ON requests(approver_id);
-CREATE INDEX idx_requests_created_at ON requests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
+CREATE INDEX IF NOT EXISTS idx_requests_requester ON requests(requester_id);
+CREATE INDEX IF NOT EXISTS idx_requests_approver ON requests(approver_id);
+CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests(created_at DESC);
 
 -- Comentarios
 COMMENT ON TABLE requests IS 'Solicitudes de recursos, materiales o permisos';
@@ -313,31 +327,37 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Aplicar trigger a todas las tablas con updated_at
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles CASCADE;
 CREATE TRIGGER update_profiles_updated_at
   BEFORE UPDATE ON profiles
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_tasks_updated_at ON profiles CASCADE;
 CREATE TRIGGER update_tasks_updated_at
   BEFORE UPDATE ON tasks
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_meetings_updated_at ON profiles CASCADE;
 CREATE TRIGGER update_meetings_updated_at
   BEFORE UPDATE ON meetings
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_attendance_sessions_updated_at ON profiles CASCADE;
 CREATE TRIGGER update_attendance_sessions_updated_at
   BEFORE UPDATE ON attendance_sessions
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_cleaning_plans_updated_at ON profiles CASCADE;
 CREATE TRIGGER update_cleaning_plans_updated_at
   BEFORE UPDATE ON cleaning_plans
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_requests_updated_at ON profiles CASCADE;
 CREATE TRIGGER update_requests_updated_at
   BEFORE UPDATE ON requests
   FOR EACH ROW
@@ -363,6 +383,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger para crear profile automáticamente
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users CASCADE;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
@@ -389,18 +410,21 @@ ALTER TABLE requests ENABLE ROW LEVEL SECURITY;
 -- =====================================================
 
 -- Todos pueden ver todos los perfiles (para asignaciones)
+DROP POLICY IF EXISTS "Perfiles visibles para todos autenticados" ON profiles;
 CREATE POLICY "Perfiles visibles para todos autenticados"
   ON profiles FOR SELECT
   TO authenticated
   USING (true);
 
 -- Solo el usuario puede actualizar su propio perfil
+DROP POLICY IF EXISTS "Usuarios pueden actualizar su propio perfil" ON profiles;
 CREATE POLICY "Usuarios pueden actualizar su propio perfil"
   ON profiles FOR UPDATE
   TO authenticated
   USING (auth.uid() = id);
 
 -- Solo JT y SA pueden crear/eliminar perfiles
+DROP POLICY IF EXISTS "Solo JT y SA pueden gestionar perfiles" ON profiles;
 CREATE POLICY "Solo JT y SA pueden gestionar perfiles"
   ON profiles FOR ALL
   TO authenticated
@@ -775,8 +799,8 @@ LEFT JOIN profiles approver ON r.approver_id = approver.id;
 -- =====================================================
 
 -- Índice compuesto para búsquedas frecuentes
-CREATE INDEX idx_tasks_status_priority ON tasks(status, priority);
-CREATE INDEX idx_requests_status_created ON requests(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_status_priority ON tasks(status, priority);
+CREATE INDEX IF NOT EXISTS idx_requests_status_created ON requests(status, created_at DESC);
 
 -- =====================================================
 -- FIN DEL SCHEMA
